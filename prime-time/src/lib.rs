@@ -3,7 +3,6 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, error, info, info_span, warn};
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 #[derive(Debug, Clone, Deserialize)]
 struct Request {
@@ -61,7 +60,7 @@ fn get_response(request: &Request) -> Option<Response> {
 }
 
 fn get_response_line(request_line: &str) -> ResponseLine {
-    match serde_json::from_str::<Request>(&request_line) {
+    match serde_json::from_str::<Request>(request_line) {
         Ok(r) => {
             debug!(request=?r, "request");
             match get_response(&r) {
