@@ -7,6 +7,7 @@ use tracing_subscriber::EnvFilter;
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum Problem {
     SmokeTest,
+    PrimeTime,
 }
 
 #[derive(Parser, Debug)]
@@ -16,7 +17,7 @@ struct Args {
     listen: SocketAddr,
 
     /// Problem to run
-    #[arg(short, long, default_value = "smoke-test")]
+    #[arg(short, long, default_value = "prime-time")]
     problem: Problem,
 }
 
@@ -39,8 +40,9 @@ async fn main() -> color_eyre::Result<()> {
     let listener = TcpListener::bind(args.listen).await?;
 
     match args.problem {
-        Problem::SmokeTest => smoke_test::serve(listener)
-    }.await;
+        Problem::SmokeTest => smoke_test::serve(listener).await,
+        Problem::PrimeTime => prime_time::serve(listener).await,
+    };
 
     Ok(())
 }

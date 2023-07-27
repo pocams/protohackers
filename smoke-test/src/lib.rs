@@ -1,8 +1,7 @@
-use std::future::Future;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 pub async fn serve(listener: TcpListener) {
     info!("starting");
@@ -12,7 +11,9 @@ pub async fn serve(listener: TcpListener) {
                 info!(client=%addr, "connection received");
                 tokio::spawn(handle(stream, addr));
             }
-            Err(e) => {}
+            Err(e) => {
+                error!(error=?e, "accept failed");
+            }
         }
     }
 }

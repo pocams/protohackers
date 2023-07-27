@@ -11,3 +11,4 @@ clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
 
 smoke-test = { path = "../smoke-test" }
+prime-time = { path = "../prime-time" }

@@ -6,4 +6,5 @@ lto = true
 members = [
     "protohackers",
     "smoke-test",
+    "prime-time",
 ]
