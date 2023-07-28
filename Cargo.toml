@@ -7,4 +7,5 @@ members = [
     "protohackers",
     "smoke-test",
     "prime-time",
+    "means-to-an-end",
 ]

@@ -8,6 +8,7 @@ use tracing_subscriber::EnvFilter;
 enum Problem {
     SmokeTest,
     PrimeTime,
+    MeansToAnEnd,
 }
 
 #[derive(Parser, Debug)]
@@ -17,7 +18,7 @@ struct Args {
     listen: SocketAddr,
 
     /// Problem to run
-    #[arg(short, long, default_value = "prime-time")]
+    #[arg(short, long, default_value = "means-to-an-end")]
     problem: Problem,
 }
 
@@ -42,6 +43,7 @@ async fn main() -> color_eyre::Result<()> {
     match args.problem {
         Problem::SmokeTest => smoke_test::serve(listener).await,
         Problem::PrimeTime => prime_time::serve(listener).await,
+        Problem::MeansToAnEnd => means_to_an_end::serve(listener).await,
     };
 
     Ok(())
