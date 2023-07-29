@@ -31,13 +31,15 @@ impl ClientData {
                 let start = request.a;
                 let end = request.b;
                 debug!(start=start, end=end, "query");
-                let mut total = 0;
-                let mut count = 0;
-                for (_timestamp, price) in self.price_history.range(start..=end) {
-                    total += price;
-                    count += 1;
+                let mut total: i64 = 0;
+                let mut count: i64 = 0;
+                if end >= start {
+                    for (_timestamp, price) in self.price_history.range(start..=end) {
+                        total += *price as i64;
+                        count += 1;
+                    }
                 }
-                let average = total.checked_div(count).unwrap_or(0);
+                let average = total.checked_div(count).unwrap_or(0) as i32;
                 debug!(total=total, count=count, average=average, "query result");
                 Some(average)
             }
@@ -64,7 +66,7 @@ pub async fn serve(listener: TcpListener) {
     }
 }
 
-async fn handle(mut stream: TcpStream, addr: SocketAddr) {
+async fn handle(stream: TcpStream, addr: SocketAddr) {
     let bincode_config = bincode::config::standard()
         .with_big_endian()
         .with_fixed_int_encoding();
