@@ -9,6 +9,7 @@ enum Problem {
     SmokeTest,
     PrimeTime,
     MeansToAnEnd,
+    BudgetChat,
 }
 
 #[derive(Parser, Debug)]
@@ -18,7 +19,7 @@ struct Args {
     listen: SocketAddr,
 
     /// Problem to run
-    #[arg(short, long, default_value = "means-to-an-end")]
+    #[arg(short, long, default_value = "budget-chat")]
     problem: Problem,
 }
 
@@ -44,6 +45,7 @@ async fn main() -> color_eyre::Result<()> {
         Problem::SmokeTest => smoke_test::serve(listener).await,
         Problem::PrimeTime => prime_time::serve(listener).await,
         Problem::MeansToAnEnd => means_to_an_end::serve(listener).await,
+        Problem::BudgetChat => budget_chat::serve(listener).await,
     };
 
     Ok(())

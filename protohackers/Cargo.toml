@@ -13,3 +13,4 @@ color-eyre = "0.6"
 smoke-test = { path = "../smoke-test" }
 prime-time = { path = "../prime-time" }
 means-to-an-end = { path = "../means-to-an-end" }
+budget-chat = { path = "../budget-chat" }
