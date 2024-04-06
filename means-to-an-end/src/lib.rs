@@ -67,7 +67,6 @@ pub async fn serve(address: SocketAddr) -> io::Result<()> {
             }
         }
     }
-    Ok(())
 }
 
 async fn handle(stream: TcpStream, addr: SocketAddr) {

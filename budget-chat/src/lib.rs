@@ -1,13 +1,12 @@
-use std::future::{Future, pending};
+use std::future::{pending};
 use std::io;
 use std::net::SocketAddr;
-use futures::{future, FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt};
 use futures::stream::FuturesUnordered;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufStream, BufWriter, Lines, ReadHalf, WriteHalf};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, Lines, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::select;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 fn is_valid_nick(s: &str) -> bool {
     s.chars().all(|c| c.is_ascii_alphanumeric())
@@ -22,7 +21,6 @@ enum ClientState {
 
 #[derive(Debug)]
 struct ChatClient<C: AsyncRead + AsyncWrite> {
-    addr: SocketAddr,
     reader: Lines<BufReader<ReadHalf<C>>>,
     writer: WriteHalf<C>,
     state: ClientState,
@@ -30,17 +28,15 @@ struct ChatClient<C: AsyncRead + AsyncWrite> {
 }
 
 impl<C: AsyncRead + AsyncWrite> ChatClient<C> {
-    fn new(addr: SocketAddr, stream: C) -> ChatClient<C> {
+    fn new(_addr: SocketAddr, stream: C) -> ChatClient<C> {
         let (r, w) = tokio::io::split(stream);
         let reader = BufReader::new(r).lines();
-        let client = ChatClient {
-            addr,
+        ChatClient {
             reader,
             writer: w,
             state: ClientState::AwaitingNick,
             nick: None,
-        };
-        client
+        }
     }
 
     async fn write_or_die(&mut self, message: &str) {
@@ -55,7 +51,7 @@ impl<C: AsyncRead + AsyncWrite> ChatClient<C> {
     }
 }
 
-async fn next_message<C: AsyncRead + AsyncWrite>(clients: &mut [ChatClient<C>]) -> (usize, Result<Option<String>, std::io::Error>) {
+async fn next_message<C: AsyncRead + AsyncWrite>(clients: &mut [ChatClient<C>]) -> (usize, Result<Option<String>, io::Error>) {
     let mut futures: FuturesUnordered<_> = clients
         .iter_mut()
         .enumerate()
@@ -101,7 +97,7 @@ pub async fn serve(address: SocketAddr) -> io::Result<()> {
                                 if is_valid_nick(n) {
                                     info!(nick=n, client=?clients[client_idx], "set nick");
                                     let in_room = format!("* in room: {}\n",
-                                        clients.iter().filter_map(|i| i.nick.as_ref().map(|s| s.as_str())).collect::<Vec<&str>>().join(", "));
+                                        clients.iter().filter_map(|i| i.nick.as_deref()).collect::<Vec<&str>>().join(", "));
                                     clients[client_idx].nick = Some(n.to_string());
                                     clients[client_idx].state = ClientState::Connected;
                                     clients[client_idx].write_or_die(in_room.as_str()).await;

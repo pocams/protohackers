@@ -37,7 +37,6 @@ pub async fn serve(address: SocketAddr) -> io::Result<()> {
             }
         }
     }
-    Ok(())
 }
 
 fn get_response(request: &Request) -> Option<Response> {
