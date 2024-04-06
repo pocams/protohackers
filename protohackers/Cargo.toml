@@ -15,3 +15,4 @@ prime-time = { path = "../prime-time" }
 means-to-an-end = { path = "../means-to-an-end" }
 budget-chat = { path = "../budget-chat" }
 unusual-database-program = { path = "../unusual-database-program" }
+mob-in-the-middle = { path = "../mob-in-the-middle" }

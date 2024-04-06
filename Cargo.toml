@@ -10,4 +10,5 @@ members = [
     "means-to-an-end",
     "budget-chat",
     "unusual-database-program",
+    "mob-in-the-middle",
 ]

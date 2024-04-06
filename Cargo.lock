@@ -422,6 +422,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mob-in-the-middle"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "regex",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -530,6 +540,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "means-to-an-end",
+ "mob-in-the-middle",
  "prime-time",
  "smoke-test",
  "tokio",
