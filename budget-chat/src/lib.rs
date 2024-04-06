@@ -1,4 +1,5 @@
 use std::future::{Future, pending};
+use std::io;
 use std::net::SocketAddr;
 use futures::{future, FutureExt, StreamExt};
 use futures::stream::FuturesUnordered;
@@ -66,9 +67,10 @@ async fn next_message<C: AsyncRead + AsyncWrite>(clients: &mut [ChatClient<C>]) 
     }
 }
 
-pub async fn serve(listener: TcpListener) {
+pub async fn serve(address: SocketAddr) -> io::Result<()> {
     let mut clients: Vec<ChatClient<TcpStream>> = Vec::new();
     info!("starting");
+    let listener = TcpListener::bind(address).await?;
     loop {
         clients.retain(|c| c.state != ClientState::Disconnected);
 

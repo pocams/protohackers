@@ -10,6 +10,7 @@ enum Problem {
     PrimeTime,
     MeansToAnEnd,
     BudgetChat,
+    UnusualDatabaseProgram,
 }
 
 #[derive(Parser, Debug)]
@@ -19,7 +20,7 @@ struct Args {
     listen: SocketAddr,
 
     /// Problem to run
-    #[arg(short, long, default_value = "budget-chat")]
+    #[arg(short, long, default_value = "unusual-database-program")]
     problem: Problem,
 }
 
@@ -37,15 +38,12 @@ async fn main() -> color_eyre::Result<()> {
 
     let args = Args::parse();
 
-    info!(listener=%args.listen, "listening");
-
-    let listener = TcpListener::bind(args.listen).await?;
-
     match args.problem {
-        Problem::SmokeTest => smoke_test::serve(listener).await,
-        Problem::PrimeTime => prime_time::serve(listener).await,
-        Problem::MeansToAnEnd => means_to_an_end::serve(listener).await,
-        Problem::BudgetChat => budget_chat::serve(listener).await,
+        Problem::SmokeTest => smoke_test::serve(args.listen).await?,
+        Problem::PrimeTime => prime_time::serve(args.listen).await?,
+        Problem::MeansToAnEnd => means_to_an_end::serve(args.listen).await?,
+        Problem::BudgetChat => budget_chat::serve(args.listen).await?,
+        Problem::UnusualDatabaseProgram => unusual_database_program::serve(args.listen).await?,
     };
 
     Ok(())

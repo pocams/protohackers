@@ -1,0 +1,9 @@
+[package]
+name = "unusual-database-program"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+futures = "0.3"

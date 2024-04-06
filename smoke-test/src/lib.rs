@@ -1,9 +1,11 @@
+use std::io;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, error, info, warn};
 
-pub async fn serve(listener: TcpListener) {
+pub async fn serve(address: SocketAddr) -> io::Result<()> {
+    let listener = TcpListener::bind(address).await?;
     info!("starting");
     loop {
         match listener.accept().await {
@@ -16,6 +18,7 @@ pub async fn serve(listener: TcpListener) {
             }
         }
     }
+    Ok(())
 }
 
 async fn handle(mut stream: TcpStream, addr: SocketAddr) {

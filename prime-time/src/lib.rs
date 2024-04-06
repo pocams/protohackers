@@ -1,3 +1,4 @@
+use std::io;
 use std::net::SocketAddr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -21,8 +22,10 @@ struct ResponseLine {
     disconnect: bool,
 }
 
-pub async fn serve(listener: TcpListener) {
+pub async fn serve(address: SocketAddr) -> io::Result<()> {
     info!("starting");
+    let listener = TcpListener::bind(address).await?;
+
     loop {
         match listener.accept().await {
             Ok((stream, addr)) => {
@@ -34,6 +37,7 @@ pub async fn serve(listener: TcpListener) {
             }
         }
     }
+    Ok(())
 }
 
 fn get_response(request: &Request) -> Option<Response> {

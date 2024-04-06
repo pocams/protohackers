@@ -8,5 +8,6 @@ members = [
     "smoke-test",
     "prime-time",
     "means-to-an-end",
-    "budget-chat"
+    "budget-chat",
+    "unusual-database-program",
 ]

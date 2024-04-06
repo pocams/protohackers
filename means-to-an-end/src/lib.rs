@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io;
 use std::net::SocketAddr;
 use bincode::Decode;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
@@ -51,8 +52,10 @@ impl ClientData {
     }
 }
 
-pub async fn serve(listener: TcpListener) {
+pub async fn serve(address: SocketAddr) -> io::Result<()> {
     info!("starting");
+    let listener = TcpListener::bind(address).await?;
+
     loop {
         match listener.accept().await {
             Ok((stream, addr)) => {
@@ -64,6 +67,7 @@ pub async fn serve(listener: TcpListener) {
             }
         }
     }
+    Ok(())
 }
 
 async fn handle(stream: TcpStream, addr: SocketAddr) {
