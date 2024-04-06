@@ -1,207 +1,151 @@
+use std::future::{Future, pending};
 use std::net::SocketAddr;
-use std::ptr::write;
-use std::sync::atomic::{AtomicU64, Ordering};
+use futures::{future, FutureExt, StreamExt};
 use futures::stream::FuturesUnordered;
-use futures::StreamExt;
-use tokio::{io, select};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter, Lines};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufStream, BufWriter, Lines, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::select;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{debug, error, info, warn};
 
-static CLIENT_ID: AtomicU64 = AtomicU64::new(0);
-
-#[derive(Debug, Clone)]
-struct ClientMessage {
-    from_client_id: u64,
-    message: MessageType,
+fn is_valid_nick(s: &str) -> bool {
+    s.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
-#[derive(Debug, Clone)]
-enum MessageType {
-    Joined(String),
-    Message(String, String),
-    Left(String),
+#[derive(Debug, Eq, PartialEq)]
+enum ClientState {
+    AwaitingNick,
+    Connected,
+    Disconnected
 }
 
 #[derive(Debug)]
-struct Client<W: AsyncWrite, R: AsyncRead> {
-    client_id: u64,
+struct ChatClient<C: AsyncRead + AsyncWrite> {
+    addr: SocketAddr,
+    reader: Lines<BufReader<ReadHalf<C>>>,
+    writer: WriteHalf<C>,
+    state: ClientState,
     nick: Option<String>,
-    to_network: BufWriter<W>,
-    // from_network: BufReader<R>,
-    from_network: Lines<BufReader<R>>,
-    to_server: Sender<ClientMessage>,
-    from_server: Receiver<ClientMessage>,
 }
 
-#[derive(Debug)]
-struct ClientHandle {
-    to_client: Sender<ClientMessage>,
-    from_client: Receiver<ClientMessage>,
-}
-
-#[derive(Debug)]
-struct Server {
-    clients: Vec<ClientHandle>,
-    new_clients: Receiver<ClientHandle>,
-}
-
-#[derive(Debug)]
-struct ServerHandle {
-    new_clients: Sender<ClientHandle>
-}
-
-impl<W: AsyncWrite + Unpin, R: AsyncRead + Unpin> Client<W, R> {
-    fn start(network: TcpStream) -> ClientHandle {
-        let (read_half, write_half) = network.into_split();
-        let (to_server, from_client) = mpsc::channel(1024);
-        let (to_client, from_server) = mpsc::channel(1024);
-        let client = Client {
-            client_id: CLIENT_ID.fetch_add(1, Ordering::SeqCst),
+impl<C: AsyncRead + AsyncWrite> ChatClient<C> {
+    fn new(addr: SocketAddr, stream: C) -> ChatClient<C> {
+        let (r, w) = tokio::io::split(stream);
+        let reader = BufReader::new(r).lines();
+        let client = ChatClient {
+            addr,
+            reader,
+            writer: w,
+            state: ClientState::AwaitingNick,
             nick: None,
-            to_network: BufWriter::new(write_half),
-            from_network: BufReader::new(read_half).lines(),
-            to_server,
-            from_server
         };
-        tokio::spawn(client.run());
-        ClientHandle {
-            to_client,
-            from_client
-        }
+        client
     }
 
-    fn set_nick(&mut self, nick: String) -> Result<(), ()> {
-        if self.nick.is_some() {
-            panic!("can't set_nick() twice");
-        }
-        if !nick.chars().all(|c| c.is_ascii_alphanumeric()) {
-            return Err(());
-        }
-        self.nick = Some(nick);
-        Ok(())
-    }
-
-    fn message(&self, message: MessageType) -> ClientMessage {
-        ClientMessage {
-            from_client_id: self.client_id,
-            message,
-        }
-    }
-
-    async fn run(mut self) {
-        info!("client running");
-        let mut connected = true;
-        let _ = self.to_network.write_all(b"hi what your nick\n").await;
-        while connected {
-            select! {
-                line = self.from_network.next_line() => {
-                    if let Ok(Some(l)) = line {
-                        if let Some(n) = self.nick.as_ref() {
-                            let _ = self.to_server.send(self.message(MessageType::Message(n.clone(), l))).await;
-                        } else {
-                            if self.set_nick(l).is_ok() {
-                                let _ = self.to_server.send(self.message(MessageType::Joined(self.nick.as_ref().unwrap().clone()))).await;
-                            } else {
-                                let _ = self.to_network.write_all(b":x\n").await;
-                                connected = false;
-                            }
-                        }
-                    }
-                }
-
-                message = self.from_server.recv() => {
-                    if let Some(message) = message {
-                        if message.from_client_id != self.client_id {
-                            if self.nick.is_some() {
-                                let msg = match message.message {
-                                    MessageType::Joined(nick) => format!("* {} has joined", nick),
-                                    MessageType::Message(nick, msg) => format!("[{}] {}", nick, msg),
-                                    MessageType::Left(nick) => format!("* {} has left", nick),
-                                };
-
-                                let mut m = msg.as_bytes().to_vec();
-                                m.push(ba'\n');
-                                if let Err(e) = self.to_network.write_all(&m).await {
-                                    error!(error=?e, "write failed");
-                                    connected = false;
-                                }
-                            }
-                        }
-                    } else {
-                        error!("server went away");
-                        connected = false;
-                    }
-                }
+    async fn write_or_die(&mut self, message: &str) {
+        match self.writer.write_all(message.as_bytes()).await {
+            Ok(_) => {
             }
-        }
-
-        if let Some(n) = self.nick.as_ref() {
-            let _ = self.to_server.send(self.message(MessageType::Left(n.clone()))).await;
+            Err(e) => {
+                error!(error=?e, "write failed, closing");
+                self.state = ClientState::Disconnected;
+            }
         }
     }
 }
 
-impl Server {
-    fn start() -> ServerHandle {
-        let (clients_to_server, clients_from_listener) = mpsc::channel(1024);
-        let server = Server {
-            clients: vec![],
-            new_clients: clients_from_listener
-        };
-        tokio::spawn(server.run());
-        ServerHandle {
-            new_clients: clients_to_server
-        }
-    }
-
-    async fn run(mut self) {
-        info!("server running");
-        loop {
-            let mut client_receives: FuturesUnordered<_> = self.clients.iter_mut().map(|c| c.from_client.recv()).collect();
-
-            select! {
-                new_client = self.new_clients.recv() => {
-                    drop(client_receives);
-                    if let Some(new_client) = new_client {
-                        debug!("server: added new client {:?}", new_client);
-                        self.clients.push(new_client);
-                    } else {
-                        error!("handler went away");
-                        break;
-                    }
-                }
-
-                Some(Some(message)) = client_receives.next() => {
-                    drop(client_receives);
-                    debug!("server: client message {:?}", message);
-                    // Ignore the possibility that clients will disconnect for now
-                    for client in self.clients.iter_mut() {
-                        let _ = client.to_client.send(message.clone()).await;
-                    }
-                }
-            }
-        }
+async fn next_message<C: AsyncRead + AsyncWrite>(clients: &mut [ChatClient<C>]) -> (usize, Result<Option<String>, std::io::Error>) {
+    let mut futures: FuturesUnordered<_> = clients
+        .iter_mut()
+        .enumerate()
+        .map(|(i, c)| c.reader.next_line().map(move |line| (i, line)))
+        .collect();
+    match futures.next().await {
+        None => { pending().await }
+        Some((idx, msg)) => (idx, msg)
     }
 }
 
 pub async fn serve(listener: TcpListener) {
+    let mut clients: Vec<ChatClient<TcpStream>> = Vec::new();
     info!("starting");
-    let server_handle = Server::start();
     loop {
-        match listener.accept().await {
-            Ok((stream, addr)) => {
-                info!(client=%addr, "connection received");
-                let client_handle = Client::<OwnedWriteHalf, OwnedReadHalf>::start(stream);
-                server_handle.new_clients.send(client_handle).await.unwrap();
+        clients.retain(|c| c.state != ClientState::Disconnected);
+
+        let new_client = select! {
+            incoming = listener.accept() => {
+                match incoming {
+                    Ok((stream, addr)) => {
+                        info!(client=%addr, "connection received");
+                        let mut client = ChatClient::new(addr, stream);
+                        client.write_or_die("enter nick\n").await;
+                        Some(client)
+                    }
+
+                    Err(e) => {
+                        error!(error=?e, "accept failed");
+                        None
+                    }
+                }
             }
 
-            Err(e) => {
-                error!(error=?e, "accept failed");
+            (client_idx, message) = next_message(&mut clients) => {
+                match message {
+                    Ok(Some(ref m)) => {
+                        info!("client message: {:?} {:?}", clients[client_idx], m);
+                        match clients[client_idx].state {
+                            ClientState::AwaitingNick => {
+                                let n = m.as_str().trim();
+                                if is_valid_nick(n) {
+                                    info!(nick=n, client=?clients[client_idx], "set nick");
+                                    let in_room = format!("* in room: {}\n",
+                                        clients.iter().filter_map(|i| i.nick.as_ref().map(|s| s.as_str())).collect::<Vec<&str>>().join(", "));
+                                    clients[client_idx].nick = Some(n.to_string());
+                                    clients[client_idx].state = ClientState::Connected;
+                                    clients[client_idx].write_or_die(in_room.as_str()).await;
+
+                                    let entered = format!("* {} entered\n", n);
+                                    for (i, c) in clients.iter_mut().enumerate() {
+                                        if i != client_idx && c.state == ClientState::Connected {
+                                            c.write_or_die(entered.as_str()).await;
+                                        }
+                                    }
+                                } else {
+                                    warn!(nick=n, client=?clients[client_idx], "invalid nick");
+                                    clients[client_idx].write_or_die("invalid nick\n").await;
+                                    clients[client_idx].state = ClientState::Disconnected;
+                                }
+                            }
+                            ClientState::Connected => {
+                                let said = format!("[{}] {}\n", clients[client_idx].nick.as_ref().expect("connected without nick"), m);
+                                for (i, c) in clients.iter_mut().enumerate() {
+                                    if i != client_idx && c.state == ClientState::Connected {
+                                        c.write_or_die(said.as_str()).await;
+                                    }
+                                }
+                            }
+                            ClientState::Disconnected => unreachable!("we filtered out disconnected clients at the top of the loop")
+                        }
+                    }
+                    Ok(None) | Err(_) => {
+                        warn!(error=?message, "Client disconnect");
+                        if clients[client_idx].state == ClientState::Connected {
+                            let left = format!("* {} left\n", clients[client_idx].nick.as_ref().expect("connected without nick"));
+                            for (i, c) in clients.iter_mut().enumerate() {
+                                if i != client_idx {
+                                    c.write_or_die(left.as_str()).await;
+                                }
+                            }
+                        }
+                        clients[client_idx].state = ClientState::Disconnected;
+                    }
+                }
+                None
             }
+        };
+
+        if let Some(c) = new_client {
+            clients.push(c);
         }
     }
 }
