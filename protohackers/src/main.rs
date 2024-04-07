@@ -12,6 +12,7 @@ enum Problem {
     BudgetChat,
     UnusualDatabaseProgram,
     MobInTheMiddle,
+    SpeedDaemon,
 }
 
 #[derive(Parser, Debug)]
@@ -21,7 +22,7 @@ struct Args {
     listen: SocketAddr,
 
     /// Problem to run
-    #[arg(short, long, default_value = "mob-in-the-middle")]
+    #[arg(short, long, default_value = "speed-daemon")]
     problem: Problem,
 }
 
@@ -46,6 +47,7 @@ async fn main() -> color_eyre::Result<()> {
         Problem::BudgetChat => budget_chat::serve(args.listen).await?,
         Problem::UnusualDatabaseProgram => unusual_database_program::serve(args.listen).await?,
         Problem::MobInTheMiddle => mob_in_the_middle::serve(args.listen).await?,
+        Problem::SpeedDaemon => speed_daemon::serve(args.listen).await?,
     };
 
     Ok(())
